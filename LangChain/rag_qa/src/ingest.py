@@ -81,7 +81,7 @@ def embed_and_persist_chunks(chunks: list[Document], settings: RagQASettings) ->
     
     return faiss_index
 
-def main(settings: RagQASettings):
+def ingest_pipeline(settings: RagQASettings):
 
     start_time = time.time()
 
