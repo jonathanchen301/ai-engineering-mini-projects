@@ -2,9 +2,10 @@ import pytest
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock, MagicMock, patch
 from langchain_core.documents import Document
-from src.chain import retrieve, build_prompt
+from langchain_core.messages.ai import AIMessage
+from src.chain import retrieve, build_prompt, call_model
 from src.config import RagQASettings
 
 class TestRetrieve:
@@ -58,16 +59,15 @@ class TestRetrieve:
 
 class TestBuildPrompt:
 
-    def test_build_prompt_returns_tuple(self):
-        """Test that build_prompt returns a tuple of (prompt, chunks)."""
+    def test_build_prompt_returns_string(self):
+        """Test that build_prompt returns a string prompt."""
         system_msg = "You are a helpful assistant."
         question = "What is the topic?"
         chunks = [Document(page_content="Test content")]
         
-        prompt, returned_chunks = build_prompt(system_msg, question, chunks)
+        prompt = build_prompt(system_msg, question, chunks)
         
         assert isinstance(prompt, str)
-        assert returned_chunks == chunks
         assert system_msg in prompt
         assert question in prompt
 
@@ -80,7 +80,7 @@ class TestBuildPrompt:
             Document(page_content="Content 2", metadata={"title": "Doc2", "page": 2})
         ]
         
-        prompt, _ = build_prompt(system_msg, question, chunks)
+        prompt = build_prompt(system_msg, question, chunks)
         
         assert "[1]" in prompt
         assert "[2]" in prompt
@@ -92,8 +92,77 @@ class TestBuildPrompt:
         system_msg = "Answer questions."
         question = "What is X?"
         
-        prompt, returned_chunks = build_prompt(system_msg, question, None)
+        prompt = build_prompt(system_msg, question, None)
         
         assert "No chunks retrieved" in prompt
-        assert returned_chunks is None
         assert question in prompt
+        assert system_msg in prompt
+
+class TestCallModel:
+
+    def test_call_model_returns_response(self):
+        """Test that call_model returns an AIMessage response."""
+        prompt = "Test prompt"
+        settings = RagQASettings(model="gpt-4o-mini", api_key="test-key")
+        
+        mock_response = AIMessage(content='{"answer": "test"}')
+        mock_response.response_metadata = {
+            "token_usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 5,
+                "total_tokens": 15
+            }
+        }
+        
+        with patch('src.chain.ChatOpenAI') as mock_chat:
+            mock_model = Mock()
+            mock_model.invoke.return_value = mock_response
+            mock_chat.return_value = mock_model
+            
+            result = call_model(prompt, settings)
+            
+            assert isinstance(result, AIMessage)
+            assert result == mock_response
+
+    def test_call_model_uses_settings(self):
+        """Test that call_model uses model and API key from settings."""
+        prompt = "Test prompt"
+        settings = RagQASettings(model="gpt-4o", api_key="test-api-key")
+        
+        mock_response = AIMessage(content='{"answer": "test"}')
+        mock_response.response_metadata = {"token_usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}}
+        
+        with patch('src.chain.ChatOpenAI') as mock_chat:
+            mock_model = Mock()
+            mock_model.invoke.return_value = mock_response
+            mock_chat.return_value = mock_model
+            
+            call_model(prompt, settings)
+            
+            # Verify ChatOpenAI was called with correct settings
+            mock_chat.assert_called_once_with(model="gpt-4o", api_key="test-api-key")
+
+    def test_call_model_accesses_token_usage(self):
+        """Test that call_model accesses token usage from response metadata."""
+        prompt = "Test prompt"
+        settings = RagQASettings(model="gpt-4o-mini", api_key="test-key")
+        
+        mock_response = AIMessage(content='{"answer": "test"}')
+        mock_response.response_metadata = {
+            "token_usage": {
+                "prompt_tokens": 20,
+                "completion_tokens": 10,
+                "total_tokens": 30
+            }
+        }
+        
+        with patch('src.chain.ChatOpenAI') as mock_chat, \
+            patch('builtins.print'):  # Suppress print output
+            mock_model = Mock()
+            mock_model.invoke.return_value = mock_response
+            mock_chat.return_value = mock_model
+            
+            call_model(prompt, settings)
+            
+            # Verify token usage was accessed (function should complete without error)
+            assert mock_response.response_metadata["token_usage"] is not None

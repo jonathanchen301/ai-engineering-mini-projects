@@ -1,6 +1,11 @@
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
+from langchain_openai import ChatOpenAI
 from typing import Optional, Iterable
+from pydantic import BaseModel
+from langchain_core.prompts import PromptTemplate
+from langchain_core.messages.ai import AIMessage
+from time import time
 
 from src.config import RagQASettings
 
@@ -25,7 +30,7 @@ def retrieve(query: str, settings: RagQASettings, store: FAISS) -> Optional[list
         return None
     return retrieved_chunks
 
-def build_prompt(system_message: str, question: str, chunks: Optional[list[Document]]) -> tuple[str, Optional[list[Document]]]:
+def build_prompt(system_message: str, question: str, chunks: Optional[list[Document]]) -> str:
 
     """
     Formats and builds a prompt for the RAG QA pipeline. Includes context, system message, and question. No memory is used. It is completely stateless.
@@ -36,7 +41,7 @@ def build_prompt(system_message: str, question: str, chunks: Optional[list[Docum
     - chunks: The chunks to use for the context. Can be None if no relevant chunks were retrieved.
 
     Returns:
-    - A tuple containing the prompt template and the chunks. The chunks are returned to allow for easy retrieval of the source metadata to display to the user at the final step.
+    - A string containing the prompt template.
     """
 
     def format_chunks(chunks: Iterable[Document]) -> str:
@@ -55,7 +60,7 @@ def build_prompt(system_message: str, question: str, chunks: Optional[list[Docum
     else:
         formatted_chunks = format_chunks(chunks)
 
-    template = f"""
+    template = """
     {system_message}
 
     CONTEXT:
@@ -64,14 +69,69 @@ def build_prompt(system_message: str, question: str, chunks: Optional[list[Docum
     QUESTION:
     {question}
 
-    Using only the information in the context, answer the question. 
-    Include citation numbers like [1], [2] in your answer when referencing sources.
+    Using only the information in the context, answer the question. If you use a citation, include the citation number at the end of the sentence like [1]. At the end of your answer, include all the citations that you used in the following format:
+
+    CITATIONS:
+    [1] Document title | Page number | Page label
+    [2] Document title | Page number | Page label
+    ...
+
     If you don't know the answer, say "I don't know the answer."
-    Return JSON in this format:
+    Return JSON in exactly this format:
     {{
         "answer": "...",
-        "citations": [1, 2, ...]
+        "citations": [
+            {{
+                "id": 1,
+                "title": "...",
+                "page": "...",
+                "page_label": "..."
+            }}
+        ]
     }}
     """
 
-    return template, chunks
+    prompt = PromptTemplate(
+        template=template,
+        input_variables=["system_message", "formatted_chunks", "question"]
+    )
+
+    return prompt.format(system_message=system_message, formatted_chunks=formatted_chunks, question=question)
+
+class Citation(BaseModel):
+    id: int
+    title: str
+    page: str
+    page_label: str
+
+class LLMResponseModel(BaseModel):
+    answer: str
+    citations: list[Citation]
+
+def call_model(prompt: str, settings: RagQASettings) -> AIMessage:
+
+    """
+    Calls the OpenAI model with the prompt and returns the response.
+
+    Records and logs token usage and latency for monitoring.
+
+    Args:
+        prompt: The formatted prompt string to send to the model.
+        settings: RagQASettings containing model name and API key.
+
+    Returns:
+        AIMessage response from the model.
+    """
+
+    start_time = time()
+    model = ChatOpenAI(model=settings.model, api_key=settings.api_key)
+    response = model.invoke(prompt)
+    end_time = time()
+
+    usage = response.response_metadata["token_usage"]
+    print(f"Latency: {end_time - start_time} seconds")
+    print("Prompt tokens:", usage["prompt_tokens"])
+    print("Completion tokens:", usage["completion_tokens"])
+    print("Total tokens:", usage["total_tokens"])
+
+    return response
