@@ -7,6 +7,7 @@ from langchain_core.documents import Document
 from langchain_core.messages.ai import AIMessage
 from src.chain import retrieve, build_prompt, call_model
 from src.config import RagQASettings
+from src.chain import LLMResponseModel, parse_response
 
 class TestRetrieve:
 
@@ -166,3 +167,35 @@ class TestCallModel:
             
             # Verify token usage was accessed (function should complete without error)
             assert mock_response.response_metadata["token_usage"] is not None
+
+class TestParseResponse:
+
+    def test_parse_response_returns_llm_response_model(self):
+        """Test that parse_response returns a LLMResponseModel."""
+        json_content = '{"answer": "This is the answer", "citations": [{"id": 1, "title": "Doc1", "page": "1", "page_label": "1"}]}'
+        response = AIMessage(content=json_content)
+        
+        result = parse_response(response)
+        
+        assert isinstance(result, LLMResponseModel)
+        assert result.answer == "This is the answer"
+        assert len(result.citations) == 1
+
+    def test_parse_response_validates_schema(self):
+        """Test that parse_response validates the JSON schema."""
+        json_content = '{"answer": "Test answer", "citations": [{"id": 1, "title": "Title", "page": "1", "page_label": "1"}]}'
+        response = AIMessage(content=json_content)
+        
+        result = parse_response(response)
+        
+        assert result.answer == "Test answer"
+        assert result.citations[0].id == 1
+        assert result.citations[0].title == "Title"
+
+    def test_parse_response_raises_on_missing_fields(self):
+        """Test that parse_response raises error when required fields are missing."""
+        json_content = '{"answer": "Test"}'
+        response = AIMessage(content=json_content)
+        
+        with pytest.raises(Exception):
+            parse_response(response)

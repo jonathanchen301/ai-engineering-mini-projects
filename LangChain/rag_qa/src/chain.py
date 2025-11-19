@@ -6,6 +6,8 @@ from pydantic import BaseModel
 from langchain_core.prompts import PromptTemplate
 from langchain_core.messages.ai import AIMessage
 from time import time
+import json
+from langchain_core.output_parsers import PydanticOutputParser
 
 from src.config import RagQASettings
 
@@ -135,3 +137,21 @@ def call_model(prompt: str, settings: RagQASettings) -> AIMessage:
     print("Total tokens:", usage["total_tokens"])
 
     return response
+
+def parse_response(response: AIMessage) -> LLMResponseModel:
+
+    """
+    Parses the response from the model and returns a LLMResponseModel object.
+
+    Args:
+        response: The AIMessage response from the model.
+
+    Returns:
+        LLMResponseModel object.
+    """
+
+    parser = PydanticOutputParser(
+        pydantic_object=LLMResponseModel
+    )
+
+    return parser.parse(response.content)
