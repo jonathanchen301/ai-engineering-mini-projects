@@ -82,6 +82,7 @@ Citations:
     "Funds could be available within 24 hours of the government reopening for most states."
 [3] The longest government shutdown in U.S. history is over. Here's what you need to know | Page 3 | page 3
     "It will likely be several days or more until everything will get back to normal."
+```
 
 ## Testing
 
