@@ -71,23 +71,29 @@ def build_prompt(system_message: str, question: str, chunks: Optional[list[Docum
     QUESTION:
     {question}
 
-    Using only the information in the context, answer the question. If you use a citation, include the citation number at the end of the sentence like [1]. At the end of your answer, include all the citations that you used in the following format:
+    Instructions:
+    1. Answer the question using ONLY the information from the context above.
+    2. When you reference information from a source, include the citation number IN THE ANSWER TEXT at the end of the relevant sentence, like this: "The government restarted [1]."
+    3. IMPORTANT: Renumber citations sequentially starting from [1] based on the order you reference them, regardless of their original numbers in the context. For example, if you use sources [1] and [4] from the context, label them as [1] and [2] in your answer and citations array.
+    4. If you don't know the answer, say "I don't know the answer."
 
-    CITATIONS:
-    [1] Document title | Page number | Page label
-    [2] Document title | Page number | Page label
-    ...
+    IMPORTANT:
+    - The "answer" field must contain your answer WITH in-text citations like [1], [2] embedded in the text.
+    - The "citations" array must ONLY include citations that are actually referenced in your answer (by their numbers).
+    - Do NOT include duplicate citations.
+    - Citation IDs must match the numbers you used in the answer text (e.g., if you use [1] in the answer, include citation with id: 1).
+    - When you renumber citations, use the metadata (title, page, page_label) and a text snippet from the ORIGINAL source in the context. For example, if you reference source [4] from context and renumber it as [1], use the title, page, page_label, and a short excerpt (1-2 sentences) from the text content of source [4] in the context.
 
-    If you don't know the answer, say "I don't know the answer."
     Return JSON in exactly this format:
     {{
-        "answer": "...",
+        "answer": "Your answer with citations like [1] and [2] embedded in the text.",
         "citations": [
             {{
                 "id": 1,
-                "title": "...",
-                "page": "...",
-                "page_label": "..."
+                "title": "Document title from context",
+                "page": "Page number from context",
+                "page_label": "Page label from context",
+                "text_snippet": "A short excerpt (1-2 sentences) from the cited chunk that supports your answer"
             }}
         ]
     }}
@@ -105,6 +111,7 @@ class Citation(BaseModel):
     title: str
     page: str
     page_label: str
+    text_snippet: str = ""  # Short excerpt from the cited chunk
 
 class LLMResponseModel(BaseModel):
     answer: str
