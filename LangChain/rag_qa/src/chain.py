@@ -155,3 +155,30 @@ def parse_response(response: AIMessage) -> LLMResponseModel:
     )
 
     return parser.parse(response.content)
+
+def run_chat(query: str, settings: RagQASettings, vector_store: FAISS) -> LLMResponseModel:
+
+    """
+    Runs the chat pipeline for a given query from retrieval to building the prompt to calling the model and parsing the response.
+
+    Args:
+        query: The query to answer.
+        settings: RagQASettings containing model name and API key.
+        vector_store: The FAISS object that contains the vector store.
+
+    Returns:
+        LLMResponseModel object.
+    """
+
+    chunks = retrieve(query, settings, vector_store)
+
+    if not chunks:
+        return LLMResponseModel(
+            answer="I couldn't find relevant info in the provided docs.",
+            citations=[]
+        )
+    
+    prompt = build_prompt("You are a helpful assistant that can answer questions about the document.", query, chunks)
+    raw_response = call_model(prompt, settings)
+    response = parse_response(raw_response)
+    return response

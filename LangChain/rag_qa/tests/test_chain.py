@@ -199,3 +199,49 @@ class TestParseResponse:
         
         with pytest.raises(Exception):
             parse_response(response)
+
+class TestRunChat:import pytest
+from unittest.mock import Mock, MagicMock, patch
+from langchain_core.documents import Document
+from langchain_core.messages.ai import AIMessage
+from src.chain import run_chat, LLMResponseModel
+from src.config import RagQASettings
+
+class TestRunChat:
+    
+    def test_run_chat_returns_llm_response_model(self):
+        """Test that run_chat returns LLMResponseModel when chunks are retrieved."""
+        query = "What is the answer?"
+        settings = RagQASettings(api_key="test-key")
+        mock_store = MagicMock()
+        
+        mock_chunks = [
+            Document(page_content="Test content", metadata={"title": "Doc1", "page": "1"})
+        ]
+        json_response = '{"answer": "The answer is test", "citations": [{"id": 1, "title": "Doc1", "page": "1", "page_label": "1"}]}'
+        mock_ai_message = AIMessage(content=json_response)
+        
+        with patch('src.chain.retrieve', return_value=mock_chunks), \
+             patch('src.chain.build_prompt', return_value="formatted prompt"), \
+             patch('src.chain.call_model', return_value=mock_ai_message), \
+             patch('src.chain.parse_response', return_value=LLMResponseModel(
+                 answer="The answer is test",
+                 citations=[]
+             )):
+            result = run_chat(query, settings, mock_store)
+            
+            assert isinstance(result, LLMResponseModel)
+            assert result.answer == "The answer is test"
+
+    def test_run_chat_returns_fallback_when_no_chunks(self):
+        """Test that run_chat returns fallback message when no chunks are retrieved."""
+        query = "What is the answer?"
+        settings = RagQASettings(api_key="test-key")
+        mock_store = MagicMock()
+        
+        with patch('src.chain.retrieve', return_value=None):
+            result = run_chat(query, settings, mock_store)
+            
+            assert isinstance(result, LLMResponseModel)
+            assert result.answer == "I couldn't find relevant info in the provided docs."
+            assert result.citations == []
