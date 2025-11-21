@@ -1,5 +1,9 @@
 pydantic
 langchain
+langchain-core
+langchain-community
 langchain-openai
+langchain-text-splitters
 python-dotenv
 pytest
+faiss-cpu
