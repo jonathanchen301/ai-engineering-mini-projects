@@ -32,6 +32,13 @@ class RagQASettings(BaseModel):
     vector_store_path: str = "./vector_store"
     document_dir: str = "documents"
 
+    # Upgrades
+    enable_compression: bool = False # Toggles compression step
+    compression_max_tokens: int = 200 # Maximum number of tokens per compressed chunk
+    enable_multi_query: bool = False # Toggles multi-query step
+    multi_query_count: int = 3 # Number of queries to run for multi-query step
+    eval_mode: bool = False # Toggles evaluation mode
+
     @model_validator(mode='after')
     def validate_chunk_params(self):
         if self.chunk_overlap >= self.chunk_size:
@@ -58,4 +65,16 @@ class RagQASettings(BaseModel):
             config["document_dir"] = args.document_dir
         if hasattr(args, "vector_store_path") and args.vector_store_path is not None:
             config["vector_store_path"] = args.vector_store_path
+
+        if hasattr(args, "enable_compression") and args.enable_compression is not None:
+            config["enable_compression"] = args.enable_compression
+        if hasattr(args, "compression_max_tokens") and args.compression_max_tokens is not None:
+            config["compression_max_tokens"] = args.compression_max_tokens
+        if hasattr(args, "enable_multi_query") and args.enable_multi_query is not None:
+            config["enable_multi_query"] = args.enable_multi_query
+        if hasattr(args, "multi_query_count") and args.multi_query_count is not None:
+            config["multi_query_count"] = args.multi_query_count
+        if hasattr(args, "eval_mode") and args.eval_mode is not None:
+            config["eval_mode"] = args.eval_mode
+
         return cls(**config)
