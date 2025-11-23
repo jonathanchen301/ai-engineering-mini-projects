@@ -10,6 +10,7 @@ from src.config import RagQASettings
 from src.ingest import ingest_pipeline
 from langchain_community.vectorstores import FAISS
 from src.chain import run_chat as run_chat_chain, retrieve, build_prompt
+from src.retrieval import retrieve_optimized
 from langchain_openai import OpenAIEmbeddings
 
 def build_parser() -> argparse.ArgumentParser:
@@ -105,6 +106,28 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Output the assembled prompt and metadata without calling the model"
     )
+    chat_parser.add_argument(
+        "--enable-compression",
+        action="store_true",
+        help="Enable compression for retrieved chunks"
+    )
+    chat_parser.add_argument(
+        "--compression-max-tokens",
+        type=int,
+        default=None,
+        help="Maximum tokens per compressed chunk (default: 200)"
+    )
+    chat_parser.add_argument(
+        "--enable-multi-query",
+        action="store_true",
+        help="Enable multi-query retrieval"
+    )
+    chat_parser.add_argument(
+        "--multi-query-count",
+        type=int,
+        default=None,
+        help="Number of query variants to generate (default: 3)"
+    )
 
     return parser
 
@@ -114,6 +137,16 @@ def run_ingest(args: argparse.Namespace) -> None:
 
 def run_chat(args: argparse.Namespace) -> None:
     settings = RagQASettings.from_cli(args)
+    
+    # Override optimization settings from CLI flags
+    if hasattr(args, 'enable_compression') and args.enable_compression:
+        settings.enable_compression = True
+    if hasattr(args, 'compression_max_tokens') and args.compression_max_tokens is not None:
+        settings.compression_max_tokens = args.compression_max_tokens
+    if hasattr(args, 'enable_multi_query') and args.enable_multi_query:
+        settings.enable_multi_query = True
+    if hasattr(args, 'multi_query_count') and args.multi_query_count is not None:
+        settings.multi_query_count = args.multi_query_count
 
     embedder = OpenAIEmbeddings(
         model="text-embedding-3-small", 
@@ -128,7 +161,11 @@ def run_chat(args: argparse.Namespace) -> None:
     
     # Handle dry-run mode
     if args.dry_run:
-        chunks = retrieve(args.query, settings, vector_store)
+        # Use retrieve_optimized if optimizations are enabled, otherwise use retrieve
+        if settings.enable_multi_query or settings.enable_compression:
+            chunks = retrieve_optimized(args.query, settings, vector_store)
+        else:
+            chunks = retrieve(args.query, settings, vector_store)
         
         if not chunks:
             print("No chunks retrieved for the query.")
@@ -158,7 +195,25 @@ def run_chat(args: argparse.Namespace) -> None:
         return
     
     # Run the chat pipeline
-    result = run_chat_chain(args.query, settings, vector_store)
+    # Use retrieve_optimized if optimizations are enabled
+    if settings.enable_multi_query or settings.enable_compression:
+        # We need to modify run_chat_chain to use retrieve_optimized, or create a wrapper
+        # For now, let's retrieve chunks first, then build prompt and call model
+        chunks = retrieve_optimized(args.query, settings, vector_store)
+        if not chunks:
+            print("I couldn't find relevant info in the provided docs.")
+            return
+        
+        from src.chain import build_prompt, call_model, parse_response
+        prompt = build_prompt(
+            "You are a helpful assistant that can answer questions about the document.",
+            args.query,
+            chunks
+        )
+        raw_response = call_model(prompt, settings)
+        result = parse_response(raw_response)
+    else:
+        result = run_chat_chain(args.query, settings, vector_store)
     
     # Print the answer
     print("\nAnswer:")
