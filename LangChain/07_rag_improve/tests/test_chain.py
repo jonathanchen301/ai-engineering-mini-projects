@@ -42,7 +42,7 @@ class TestRetrieve:
         
         retrieve(query, settings, mock_store)
         
-        mock_store.as_retriever.assert_called_once_with(k=5)
+        mock_store.as_retriever.assert_called_once_with(search_kwargs={"k": 5})
 
     def test_retrieve_returns_none_when_empty(self):
         """Test that retrieve returns None when no chunks are found."""

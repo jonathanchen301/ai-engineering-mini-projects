@@ -9,6 +9,8 @@ def compress_chunks(chunks: list[Document], settings: RagQASettings) -> list[Doc
     """
     Compresses retrieved chunks to a defined smaller number of tokens per chunk.
 
+    Langchain has a built-in way to do this through ContextualCompressionRetriever or LLMChainExtractor.
+
     Args:
     - chunks: list[Document] - The chunks to compress.
     - settings: RagQASettings - The settings for the compression.

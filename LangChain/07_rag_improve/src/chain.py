@@ -26,7 +26,7 @@ def retrieve(query: str, settings: RagQASettings, store: FAISS) -> Optional[list
     - None if no chunks are retrieved for the query.
     """
 
-    retriever = store.as_retriever(k=settings.top_k)
+    retriever = store.as_retriever(search_kwargs={"k": settings.top_k})
     retrieved_chunks = retriever.invoke(query)
     if len(retrieved_chunks) == 0:
         return None
